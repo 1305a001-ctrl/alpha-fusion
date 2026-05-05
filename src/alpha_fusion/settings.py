@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     edge_bps_floor: int = 10
     edge_bps_ceiling: int = 100  # confidence 1.0 maps here; 0.0 to floor
 
+    # v0.2 — bucket / debounce parameters for N:M aggregation
+    bucket_quiet_seconds: int = 5     # emit when no new signal for this long
+    bucket_max_age_seconds: int = 30  # OR force-emit at this age (cap on debounce)
+    bucket_emit_poll_seconds: float = 1.0  # how often the emit-loop scans buckets
+
+    # v0.2 — dedup: redis SET NX EX on signal.id
+    dedup_ttl_seconds: int = 3_600
+
     # Strategy cache refresh
     strategy_refresh_seconds: int = 600  # 10 min
 
