@@ -5,6 +5,7 @@ without a DB hit per signal. New strategies get picked up at the next
 refresh tick.
 """
 import asyncio
+import json
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -34,7 +35,9 @@ _cache_lock = asyncio.Lock()
 
 
 def _build_meta(row: dict[str, Any], signal_asset_hint: str = "") -> StrategyMeta:
-    fm = row.get("frontmatter") or {}
+    fm_raw = row.get("frontmatter") or {}
+    # asyncpg returns jsonb as a string by default — decode if so.
+    fm = json.loads(fm_raw) if isinstance(fm_raw, str) else fm_raw
     tags = fm.get("tags") or []
     bucket = fm.get("bucket")
     asset_class = infer_asset_class(
