@@ -38,7 +38,8 @@ async def _run() -> None:
     await strategies.refresh_cache()
 
     tasks = [
-        asyncio.create_task(runtime.loop(), name="fusion"),
+        asyncio.create_task(runtime.ingest_loop(), name="ingest"),
+        asyncio.create_task(runtime.emit_loop(), name="emit"),
         asyncio.create_task(strategies.refresh_loop(), name="strategy-refresh"),
         asyncio.create_task(health.serve(), name="health"),
     ]
