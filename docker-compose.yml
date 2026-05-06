@@ -1,6 +1,6 @@
 services:
   alpha-fusion:
-    build: .
+    image: ghcr.io/1305a001-ctrl/alpha-fusion:latest
     container_name: alpha-fusion
     restart: unless-stopped
     env_file:
