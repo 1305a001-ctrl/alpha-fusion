@@ -28,10 +28,35 @@ class StrategyMeta:
     asset_class: AssetClass
     tags: list[str]
     bucket: str | None  # fast-intraday | swing | conviction | poly-bet | hedge | None
+    # v0.3: per-strategy alpha lifetime in seconds. Pulled from
+    # frontmatter.trading.time_stop_seconds OR frontmatter.trading.time_stop_hours*3600.
+    # None → fall through to settings.alpha_lifetime_seconds default.
+    alpha_lifetime_seconds: int | None = None
 
 
 _cache: dict[UUID, StrategyMeta] = {}
 _cache_lock = asyncio.Lock()
+
+
+def _extract_lifetime_seconds(trading_block: dict[str, Any] | None) -> int | None:
+    """Pure: pull alpha lifetime from a strategy's `trading` frontmatter block.
+
+    Accepts either:
+      - trading.time_stop_seconds (preferred, used by Phase A1/A3 momentum)
+      - trading.time_stop_hours   (legacy, multiply by 3600)
+    Returns None if neither set / malformed.
+    """
+    if not isinstance(trading_block, dict):
+        return None
+    secs = trading_block.get("time_stop_seconds")
+    if isinstance(secs, int) and secs > 0:
+        return secs
+    if isinstance(secs, float) and secs > 0:
+        return int(secs)
+    hours = trading_block.get("time_stop_hours")
+    if isinstance(hours, int | float) and hours > 0:
+        return int(hours * 3600)
+    return None
 
 
 def _build_meta(row: dict[str, Any], signal_asset_hint: str = "") -> StrategyMeta:
@@ -51,6 +76,7 @@ def _build_meta(row: dict[str, Any], signal_asset_hint: str = "") -> StrategyMet
         asset_class=asset_class,
         tags=list(tags),
         bucket=bucket,
+        alpha_lifetime_seconds=_extract_lifetime_seconds(fm.get("trading")),
     )
 
 
