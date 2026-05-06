@@ -5,10 +5,17 @@ Two paths:
   - aggregate_to_alpha(): v0.2 N:M — combines a list of (Signal, StrategyMeta)
                                       from a single bucket into one Alpha
 
+v0.3 changes:
+  - alpha.id is a deterministic uuid5 derived from contributing signal-ids
+    so a re-fusion of the same input collapses to the same id and the
+    oms-gateway idempotency_key UNIQUE constraint catches duplicates
+  - alpha lifetime now reads strategy.frontmatter.trading.time_stop_seconds
+    when present, falling back to settings.alpha_lifetime_seconds
+
 No I/O here — easy to unit-test with synthesised inputs.
 """
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid5
 
 from signals_contract.alpha import Alpha, ContributingSource
 from signals_contract.signal import Signal
@@ -16,6 +23,33 @@ from signals_contract.signal import Signal
 from alpha_fusion.normalize import canonicalize_asset
 from alpha_fusion.settings import settings
 from alpha_fusion.strategies import StrategyMeta
+
+# Stable namespace for deterministic alpha-id derivation. Generated once
+# (uuid4 then frozen) and then used in uuid5(namespace, name). Changing this
+# would invalidate dedup across the fleet, so don't.
+_ALPHA_NAMESPACE = UUID("8c0f4e1a-7b6d-5c4a-9d3e-2f1a0b9c8d7e")
+
+
+def _alpha_id_for_signal(signal_id: UUID) -> UUID:
+    """Deterministic alpha-id from a single signal id (1:1 path)."""
+    return uuid5(_ALPHA_NAMESPACE, str(signal_id))
+
+
+def _alpha_id_for_aggregate(signal_ids: list[UUID]) -> UUID:
+    """Deterministic alpha-id from the unique set of contributing signals.
+
+    Sort first so order doesn't change the hash. Two re-fusions of the
+    same signal set produce the same alpha-id.
+    """
+    sorted_ids = sorted(str(s) for s in signal_ids)
+    return uuid5(_ALPHA_NAMESPACE, "|".join(sorted_ids))
+
+
+def _lifetime_seconds_for(strategy: StrategyMeta) -> int:
+    """Per-strategy lifetime override → settings default."""
+    if strategy.alpha_lifetime_seconds is not None:
+        return strategy.alpha_lifetime_seconds
+    return settings.alpha_lifetime_seconds
 
 
 def _edge_bps_from_confidence(conf: float) -> int:
@@ -51,11 +85,11 @@ def signal_to_alpha(
 
     asset = canonicalize_asset(signal.asset, strategy.asset_class)
     expires_at = signal.published_at + timedelta(
-        seconds=settings.alpha_lifetime_seconds
+        seconds=_lifetime_seconds_for(strategy)
     )
 
     alpha = Alpha(
-        id=uuid4(),
+        id=_alpha_id_for_signal(signal.id),
         created_at=signal.published_at,
         expires_at=expires_at,
         asset_class=strategy.asset_class,
@@ -157,10 +191,18 @@ def aggregate_to_alpha(
         f"avg conf={avg_conf:.2f}"
     )
 
+    # Per-strategy lifetime: take the SHORTEST across the contributing
+    # strategies — if any one has a tight time-stop (e.g. fast-intraday
+    # 10 min), respect that bound for the aggregate too.
+    lifetime_seconds = min(
+        (_lifetime_seconds_for(st) for _, st in entries),
+        default=settings.alpha_lifetime_seconds,
+    )
+
     alpha = Alpha(
-        id=uuid4(),
+        id=_alpha_id_for_aggregate([s.id for s, _ in entries]),
         created_at=earliest,
-        expires_at=latest + timedelta(seconds=settings.alpha_lifetime_seconds),
+        expires_at=latest + timedelta(seconds=lifetime_seconds),
         asset_class=first_strategy.asset_class,
         asset=asset,
         direction=first_signal.direction,

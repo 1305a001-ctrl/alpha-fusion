@@ -5,7 +5,7 @@ import signal as os_signal
 
 import structlog
 
-from alpha_fusion import health, runtime, strategies
+from alpha_fusion import __version__, health, runtime, strategies
 from alpha_fusion.db import db
 from alpha_fusion.redis_client import close as close_redis
 from alpha_fusion.settings import settings
@@ -31,7 +31,7 @@ def _configure_logging() -> None:
 
 async def _run() -> None:
     log = structlog.get_logger("alpha_fusion.main")
-    log.info("starting", version="0.1.0")
+    log.info("starting", version=__version__)
 
     await db.connect()
     # Prime cache before the fusion loop so we don't miss signals on cold start.
