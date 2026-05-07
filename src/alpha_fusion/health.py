@@ -1,5 +1,6 @@
 """Tiny aiohttp /health endpoint."""
 import asyncio
+from collections.abc import Awaitable
 
 import structlog
 from aiohttp import web
@@ -21,7 +22,11 @@ async def _health(_req: web.Request) -> web.Response:
     except Exception as exc:
         checks["postgres"] = f"down: {exc}"
     try:
-        await r().ping()
+        # redis-py types ping() as `Awaitable[bool] | bool` (sync vs async
+        # mode); cast pins it to the async branch we're actually using and
+        # wait_for adds a 2s timeout so a hung redis can't stall the probe.
+        ping_result: Awaitable[bool] = r().ping()  # type: ignore[assignment]
+        await asyncio.wait_for(ping_result, timeout=2.0)
         checks["redis"] = "ok"
     except Exception as exc:
         checks["redis"] = f"down: {exc}"
