@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     # v0.2 — dedup: redis SET NX EX on signal.id
     dedup_ttl_seconds: int = 3_600
 
+    # v0.4 — pending-entries reclaim. When alpha-fusion crashes mid-process,
+    # claimed-but-unacked entries sit in PEL forever; the reclaim loop
+    # XAUTOCLAIMs them after `min_idle_ms` and re-processes via the same
+    # ingest pipeline. Poison-message guard drops entries whose delivery
+    # count exceeds the threshold so they can't churn forever.
+    pending_claim_interval_sec: int = 60
+    pending_claim_min_idle_ms: int = 120_000   # 2 minutes idle = orphaned
+    pending_claim_batch_size: int = 100
+    poison_threshold_deliveries: int = 5
+
     # Strategy cache refresh
     strategy_refresh_seconds: int = 600  # 10 min
 

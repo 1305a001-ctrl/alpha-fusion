@@ -7,7 +7,7 @@ where = ["src"]
 
 [project]
 name = "alpha-fusion"
-version = "0.3.0"
+version = "0.4.0"
 description = "Phase 2.6 — bridges news-consolidator's signals:trading/critical/poly streams to alphas:active. v0.1 is 1:1 Signal→Alpha passthrough with asset canonicalization and per-strategy lookup."
 requires-python = ">=3.11"
 dependencies = [
