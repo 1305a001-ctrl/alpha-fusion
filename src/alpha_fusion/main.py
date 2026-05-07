@@ -5,7 +5,7 @@ import signal as os_signal
 
 import structlog
 
-from alpha_fusion import __version__, health, runtime, strategies
+from alpha_fusion import __version__, health, reclaim, runtime, strategies
 from alpha_fusion.db import db
 from alpha_fusion.redis_client import close as close_redis
 from alpha_fusion.settings import settings
@@ -41,6 +41,10 @@ async def _run() -> None:
         asyncio.create_task(runtime.ingest_loop(), name="ingest"),
         asyncio.create_task(runtime.emit_loop(), name="emit"),
         asyncio.create_task(strategies.refresh_loop(), name="strategy-refresh"),
+        asyncio.create_task(
+            reclaim.loop(process=runtime._ingest_one),
+            name="reclaim",
+        ),
         asyncio.create_task(health.serve(), name="health"),
     ]
 
